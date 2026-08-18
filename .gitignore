@@ -3,3 +3,4 @@ venv/
 *.db
 *:Zone.Identifier
 resume.tex
+__pycache__/

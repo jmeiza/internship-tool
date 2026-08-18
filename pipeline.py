@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
+from resume import read_resume
 
 load_dotenv()
 
@@ -11,6 +12,13 @@ class JobPosting(BaseModel):
     company: str
     role: str
     requirements: list[str]
+
+class TailoredSection(BaseModel):
+    section: str
+    bullets: list[str]
+
+class TailoredResume(BaseModel):
+    sections: list[TailoredSection]
 
 def parse_job_posting(job_posting_text: str):
     response = client.responses.parse(
@@ -23,8 +31,34 @@ def parse_job_posting(job_posting_text: str):
     )
     return response.output_parsed
 
-if __name__ == "__main__":
-    sample_posting = """
+prompt = """ 
+You are a top-tier hiring manager at a tech company. Modify the provided resume to align more with the provided job requirements and the company's overall core values. The goal is to write the resume in a way that reflects key things that the company is looking for in its hirees.
+
+RULE: Do not make up anything not explicitly mentioned in the resume. This includes job titles, company names, and project names — use them exactly as written in the original resume. Only the bullet point descriptions may be reworded to align with the job posting.
+
+Summary of Qualification section:
+Modify the summary of qualifications to align with the job requirements. Only three bullet points for this section.
+
+Experience Section:
+If the need be, modify the experiences section to align better with the job posting. The section name here should be the name of the position/role, not "Experience."
+
+Projects Section:
+Out of all the projects listed in the resume, include at least three that best fits the demands of the job requirements. Modify the bullet points for the projects that you include if the need be. The section name here should be the name of the project. Each project should have three bullet points.
+
+NOTE: As you modify the different sections of the resume, also take into account the section of the job posting that describes what the hiree's daily responsibilities would look like."""
+
+def draft_resume(job_posting: JobPosting, resume_text: str) -> TailoredResume:
+    response = client.responses.parse(
+        model="gpt-4o-2024-08-06",
+        input=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Resume:\n{resume_text}\n\nJob requirements:\n{job_posting}"}
+        ],
+        text_format=TailoredResume,
+    )
+    return response.output_parsed
+
+sample_posting = """
 About Terminal
 Terminal builds telematics data infrastructure for the commercial fleet industry. Commercial auto insurers and fleet software companies, including industry leaders like Intact Insurance, depend on our platform to access GPS, speeding, and vehicle data from 330+ telematics providers. We recently raised our Series A led by Battery Ventures and are backed by Y Combinator, Golden Ventures, Penske Transportation Solutions, and Intact Private Capital. Our team works together in person in Toronto, combining early-stage speed with late-stage maturity while processing many terabytes of vehicle data every day.
 
@@ -120,5 +154,17 @@ On-site culture loop + final (180 min)
 Accessibility and accommodation
 
 Terminal is committed to an accessible hiring process. If you need an accommodation at any stage — applying, interviewing, or completing an assessment — email careers@withterminal.com and we will work with you to meet your needs. Accommodations are available under the Accessibility for Ontarians with Disabilities Act (AODA) and the Ontario Human Rights Code, and requesting one will never affect how your application is considered."""
-    result = parse_job_posting(sample_posting)
-    print(result)
+
+
+if __name__ == "__main__":
+    
+    job_info = parse_job_posting(sample_posting)
+    print(job_info)
+
+    resume_text = read_resume("resume.tex")
+    tailored = draft_resume(job_info, resume_text)
+
+    for section in tailored.sections:
+        print(f"\n{section.section}")
+        for bullet in section.bullets:
+            print(f"    -{bullet}")
